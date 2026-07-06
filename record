@@ -1,0 +1,40 @@
+#!/bin/bash
+
+sys_audio="alsa_output.pci-0000_00_1b.0.analog-stereo.monitor"
+mic_audio="alsa_input.pci-0000_00_1b.0.analog-stereo"
+
+sys_vol="3.5"
+mic_vol="1.5"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --no-mic) no_mic=1 ;;
+    --sys-vol) sys_vol="$2"; shift ;;
+    --mic-vol) mic_vol="$2"; shift ;;
+    --help|-h) echo "Usage: record [--no-mic] [--sys-vol N] [--mic-vol N]"; exit 0 ;;
+    *) echo "Unknown: $1 (use --help)"; exit 1 ;;
+  esac
+  shift
+done
+
+out="$HOME/Videos/screen-$(date +%Y%m%d-%H%M%S).mkv"
+
+if [ "$no_mic" = "1" ]; then
+  ffmpeg -video_size 1366x768 -framerate 30 -f x11grab -i :0.0 \
+         -f pulse -i "$sys_audio" \
+         -af "volume=$sys_vol" \
+         -c:v libx264 -crf 18 -preset fast \
+         -c:a aac -b:a 192k \
+         "$out"
+else
+  ffmpeg -video_size 1366x768 -framerate 30 -f x11grab -i :0.0 \
+         -f pulse -i "$sys_audio" \
+         -f pulse -i "$mic_audio" \
+         -filter_complex "[1:a]volume=$sys_vol[sys];[2:a]volume=$mic_vol[mic];[sys][mic]amix=inputs=2:duration=first:dropout_transition=2[a]" \
+         -map 0:v -map "[a]" \
+         -c:v libx264 -crf 18 -preset fast \
+         -c:a aac -b:a 192k \
+         "$out"
+fi
+
+echo "Saved: $out"
